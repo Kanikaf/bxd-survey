@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BxD 戦力アンケート</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #1a2233;
+    --panel-border: #2c3852;
+    --accent: #4f8cff;
+    --accent-dark: #3468d4;
+    --text: #eaf0ff;
+    --text-dim: #9aa8c7;
+    --error: #ff6b6b;
+    --success: #4fd18b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at top, #182238 0%, var(--bg) 60%);
+    font-family: "Hiragino Sans", "Yu Gothic", "Segoe UI", sans-serif;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 28px 24px 24px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .header .tag {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 3px 12px;
+    margin-bottom: 10px;
+  }
+  .header h1 {
+    font-size: 20px;
+    margin: 0;
+  }
+  .header p {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin: 18px 0 6px;
+  }
+  input[type="text"],
+  input[type="number"],
+  select {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    background: #101828;
+    color: var(--text);
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.15s;
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  select {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%239aa8c7'><path d='M5 7l5 5 5-5z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 16px;
+  }
+  input:focus, select:focus {
+    border-color: var(--accent);
+  }
+  .branch-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .branch-option {
+    position: relative;
+  }
+  .branch-option input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+  }
+  .branch-option span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 4px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    background: #101828;
+    font-size: 13px;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .branch-option input:checked + span {
+    border-color: var(--accent);
+    background: rgba(79,140,255,0.15);
+    color: #fff;
+    font-weight: 600;
+  }
+  .power-group {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .power-group input {
+    flex: 1;
+    min-width: 0;
+  }
+  .power-unit {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    background: #0b1220;
+    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  button {
+    width: 100%;
+    margin-top: 26px;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
+  button:hover { background: var(--accent-dark); }
+  button:active { transform: scale(0.98); }
+  button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .msg {
+    margin-top: 14px;
+    font-size: 13px;
+    text-align: center;
+    min-height: 18px;
+  }
+  .msg.error { color: var(--error); }
+  .msg.success { color: var(--success); }
+  .footer-note {
+    margin-top: 18px;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="header">
+    <span class="tag">BxD</span>
+    <h1>戦力アンケート</h1>
+    <p>名前・兵科・1軍戦力を入力してください</p>
+  </div>
+
+  <form id="surveyForm">
+    <label for="name">名前（ゲーム内名）</label>
+    <input type="text" id="name" placeholder="例）カニカフ" required>
+
+    <label>兵科</label>
+    <div class="branch-group">
+      <label class="branch-option">
+        <input type="radio" name="branch" value="戦車" required>
+        <span>戦車</span>
+      </label>
+      <label class="branch-option">
+        <input type="radio" name="branch" value="航空">
+        <span>航空</span>
+      </label>
+      <label class="branch-option">
+        <input type="radio" name="branch" value="ロケラン">
+        <span>ロケラン</span>
+      </label>
+    </div>
+
+    <label for="power">1軍戦力</label>
+    <div class="power-group">
+      <input type="text" id="power" placeholder="85.0" inputmode="decimal" required>
+      <span class="power-unit">M</span>
+    </div>
+
+    <button type="submit" id="submitBtn">送信する</button>
+    <div class="msg" id="msg"></div>
+  </form>
+
+  <div class="footer-note">送信内容はカニカフスプレッドシートに記録されます</div>
+</div>
+
+<script>
+  // ↓↓↓ ここをApps Scriptで発行したウェブアプリURL（.../exec）に置き換えてください ↓↓↓
+  const GAS_URL = "https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec";
+
+  const form = document.getElementById('surveyForm');
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('submitBtn');
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const name = document.getElementById('name').value.trim();
+    const branchEl = form.querySelector('input[name="branch"]:checked');
+    const power = document.getElementById('power').value.trim();
+
+    if (!name || !branchEl || !power) {
+      msg.textContent = '未入力の項目があります';
+      msg.className = 'msg error';
+      return;
+    }
+
+    const payload = {
+      name: name,
+      branch: branchEl.value,
+      power: power + 'M'
+    };
+
+    btn.disabled = true;
+    btn.textContent = '送信中...';
+    msg.textContent = '';
+    msg.className = 'msg';
+
+    // GASのCORSプリフライト回避のため text/plain で送信（GAS側でJSON.parseする）
+    fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    })
+      .then(function () {
+        // no-cors のためレスポンス内容は読めない → 通信自体が成功したら完了とみなす
+        msg.textContent = '送信しました。ありがとうございます！';
+        msg.className = 'msg success';
+        form.reset();
+      })
+      .catch(function (err) {
+        msg.textContent = '送信に失敗しました。通信環境を確認してください。';
+        msg.className = 'msg error';
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.textContent = '送信する';
+      });
+  });
+</script>
+
+</body>
+</html>
