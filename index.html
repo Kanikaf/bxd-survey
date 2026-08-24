@@ -91,6 +91,51 @@
   input:focus, select:focus {
     border-color: var(--accent);
   }
+
+  /* ---- 名前モード切り替えタブ ---- */
+  .mode-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .mode-option { position: relative; }
+  .mode-option input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+  }
+  .mode-option span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 4px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    background: #101828;
+    font-size: 13px;
+    text-align: center;
+    transition: all 0.15s;
+    line-height: 1.3;
+  }
+  .mode-option input:checked + span {
+    border-color: var(--accent);
+    background: rgba(79,140,255,0.15);
+    color: #fff;
+    font-weight: 600;
+  }
+  .name-panel { display: none; margin-top: 10px; }
+  .name-panel.active { display: block; }
+  .hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+  .hint.warn { color: var(--error); }
+
   .branch-group {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -194,8 +239,32 @@
   </div>
 
   <form id="surveyForm">
-    <label for="name">名前（ゲーム内名）</label>
-    <input type="text" id="name" placeholder="例）カニカフ" required>
+
+    <label>名前の入力方法</label>
+    <div class="mode-group">
+      <label class="mode-option">
+        <input type="radio" name="nameMode" value="existing" checked>
+        <span>連盟リストから選択</span>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="nameMode" value="new">
+        <span>新規で名前を登録</span>
+      </label>
+    </div>
+
+    <div class="name-panel active" id="panelExisting">
+      <label for="existingName">名前（リストから選択）</label>
+      <select id="existingName">
+        <option value="">読み込み中...</option>
+      </select>
+      <div class="hint" id="listHint"></div>
+    </div>
+
+    <div class="name-panel" id="panelNew">
+      <label for="newName">名前（新規・ゲーム内名）</label>
+      <input type="text" id="newName" placeholder="例）カニカフ">
+      <div class="hint" id="newNameHint"></div>
+    </div>
 
     <label>兵科</label>
     <div class="branch-group">
@@ -227,21 +296,127 @@
 </div>
 
 <script>
-  // ↓↓↓ ここをApps Scriptで発行したウェブアプリURL（.../exec）に置き換えてください ↓↓↓
+  // ↓↓↓ Apps Scriptで発行したウェブアプリURL（.../exec） ↓↓↓
   const GAS_URL = "https://script.google.com/macros/s/AKfycbzkFpCjYsqnM3tTfRYXHvEFMDx3OL0MW1WQ9UsjIwlTLcytyvXkQUIFoxg-kvnsYA0R/exec";
 
   const form = document.getElementById('surveyForm');
   const msg = document.getElementById('msg');
   const btn = document.getElementById('submitBtn');
 
+  const existingSelect = document.getElementById('existingName');
+  const newNameInput = document.getElementById('newName');
+  const newNameHint = document.getElementById('newNameHint');
+  const listHint = document.getElementById('listHint');
+  const panelExisting = document.getElementById('panelExisting');
+  const panelNew = document.getElementById('panelNew');
+
+  const branchRadios = form.querySelectorAll('input[name="branch"]');
+  const powerInput = document.getElementById('power');
+
+  // name -> {branch, power} のマップ（既存選択時に現在値を自動入力するため）
+  let playerMap = {};
+  let nameListLoaded = false;
+  let existingNamesLower = [];
+
+  // ---- 名前モード切り替え ----
+  form.querySelectorAll('input[name="nameMode"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      if (this.value === 'existing') {
+        panelExisting.classList.add('active');
+        panelNew.classList.remove('active');
+      } else {
+        panelNew.classList.add('active');
+        panelExisting.classList.remove('active');
+      }
+      msg.textContent = '';
+      msg.className = 'msg';
+    });
+  });
+
+  // ---- 連盟リスト取得 ----
+  fetch(GAS_URL + '?action=list')
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      if (!data || !data.ok || !Array.isArray(data.players)) {
+        throw new Error('list format error');
+      }
+      playerMap = {};
+      existingSelect.innerHTML = '<option value="">選択してください</option>';
+      data.players
+        .slice()
+        .sort(function (a, b) { return a.name.localeCompare(b.name, 'ja'); })
+        .forEach(function (p) {
+          playerMap[p.name] = { branch: p.branch, power: p.power };
+          existingNamesLower.push(p.name.trim().toLowerCase());
+          const opt = document.createElement('option');
+          opt.value = p.name;
+          opt.textContent = p.name;
+          existingSelect.appendChild(opt);
+        });
+      nameListLoaded = true;
+      listHint.textContent = '';
+    })
+    .catch(function () {
+      existingSelect.innerHTML = '<option value="">取得に失敗しました</option>';
+      listHint.textContent = 'リストの取得に失敗しました。「新規で名前を登録」から入力するか、時間をおいて再度お試しください。';
+      listHint.classList.add('warn');
+    });
+
+  // 既存名を選んだら、現在の兵科・戦力を自動入力（上書きしたい値だけ変更すればOK）
+  existingSelect.addEventListener('change', function () {
+    const p = playerMap[this.value];
+    if (!p) return;
+    if (p.branch) {
+      branchRadios.forEach(function (r) { r.checked = (r.value === p.branch); });
+    }
+    if (p.power !== undefined && p.power !== '') {
+      powerInput.value = p.power;
+    }
+  });
+
+  // 新規名入力時、既存リストと完全一致したら警告してブロック
+  newNameInput.addEventListener('input', function () {
+    const v = this.value.trim().toLowerCase();
+    if (v && existingNamesLower.indexOf(v) !== -1) {
+      newNameHint.textContent = 'この名前は既に連盟リストにあります。「連盟リストから選択」を使ってください。';
+      newNameHint.classList.add('warn');
+    } else {
+      newNameHint.textContent = '';
+      newNameHint.classList.remove('warn');
+    }
+  });
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
 
-    const name = document.getElementById('name').value.trim();
-    const branchEl = form.querySelector('input[name="branch"]:checked');
-    const power = document.getElementById('power').value.trim();
+    const mode = form.querySelector('input[name="nameMode"]:checked').value;
+    let name = '';
 
-    if (!name || !branchEl || !power) {
+    if (mode === 'existing') {
+      name = existingSelect.value.trim();
+      if (!name) {
+        msg.textContent = '名前をリストから選択してください';
+        msg.className = 'msg error';
+        return;
+      }
+    } else {
+      name = newNameInput.value.trim();
+      if (!name) {
+        msg.textContent = '名前を入力してください';
+        msg.className = 'msg error';
+        return;
+      }
+      if (existingNamesLower.indexOf(name.toLowerCase()) !== -1) {
+        msg.textContent = 'この名前は既にリストにあります。「連盟リストから選択」を使ってください';
+        msg.className = 'msg error';
+        return;
+      }
+    }
+
+    const branchEl = form.querySelector('input[name="branch"]:checked');
+    const power = powerInput.value.trim();
+
+    if (!branchEl || !power) {
       msg.textContent = '未入力の項目があります';
       msg.className = 'msg error';
       return;
@@ -250,7 +425,7 @@
     const payload = {
       name: name,
       branch: branchEl.value,
-      power: power + 'M'
+      power: power   // GAS側で数値(M単位)として保存
     };
 
     btn.disabled = true;
@@ -269,9 +444,23 @@
         // no-cors のためレスポンス内容は読めない → 通信自体が成功したら完了とみなす
         msg.textContent = '送信しました。ありがとうございます！';
         msg.className = 'msg success';
-        form.reset();
+
+        // 新規登録した名前は次回から選べるようローカルのリストにも反映
+        if (mode === 'new') {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          existingSelect.appendChild(opt);
+          existingNamesLower.push(name.toLowerCase());
+          playerMap[name] = { branch: payload.branch, power: payload.power };
+        }
+
+        form.querySelectorAll('input[name="branch"]').forEach(function (r) { r.checked = false; });
+        powerInput.value = '';
+        newNameInput.value = '';
+        newNameHint.textContent = '';
       })
-      .catch(function (err) {
+      .catch(function () {
         msg.textContent = '送信に失敗しました。通信環境を確認してください。';
         msg.className = 'msg error';
       })
